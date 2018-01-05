@@ -1,0 +1,1 @@
+Steckdose aus/ein über MQTT
