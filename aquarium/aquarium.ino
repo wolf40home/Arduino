@@ -3,9 +3,9 @@
 #include "User_config.h"
 #include <PubSubClient.h>
 #include <ESP8266WiFi.h>
-#include <ESP8266WebServer.h>
-#include <ArduinoOTA.h>
 
+#include <ArduinoOTA.h>
+uint8_t GPIO_Relais = 2;
 //adding this to bypass the problem of the arduino builder issue 50
 void callback(char*topic, byte* payload,unsigned int length);
 
@@ -22,15 +22,15 @@ boolean reconnect() {
   while (!client.connected()) {
     trc(F("MQTT connection...")); //F function enable to decrease sram usage
     #ifdef mqtt_user
-      if (client.connect(Client_Name, mqtt_user, mqtt_password, will_Topic, will_QoS, will_Retain, will_Message)) { // if an mqtt user is defined we connect to the broker with authentication
+      if (client.connect(mqtt_Client_Name, mqtt_user, mqtt_password, will_Topic, will_QoS, will_Retain, will_Message)) { // if an mqtt user is defined we connect to the broker with authentication
     #else
-      if (client.connect(Client_Name, will_Topic, will_QoS, will_Retain, will_Message)) {
+      if (client.connect(mqtt_Client_Name, will_Topic, will_QoS, will_Retain, will_Message)) {
     #endif
       trc(F("Connected to broker"));
       // Once connected, publish an announcement...
       client.publish(will_Topic,Gateway_AnnouncementMsg,will_Retain);
       // publish version
-      client.publish(version_Topic,ESP01_VERSION,will_Retain);
+      client.publish(version_Topic,ESP_VERSION,will_Retain);
       //Subscribing to topic
       if (client.subscribe(subjectMQTTtoX)) {
        trc("subcribe " subjectMQTTtoX "ok");
@@ -50,8 +50,8 @@ boolean reconnect() {
     contador++;
     String payload2="";
     payload2 = contador;
-    client.publish(mqtt_Topic Client_Name "/count",(char*)payload2.c_str());
-    trc(mqtt_Topic Client_Name "/count =");
+    client.publish(count_Topic ,(char*)payload2.c_str());
+    trc(count_Topic " =");
 
   return client.connected();
 }
@@ -62,53 +62,20 @@ void callback(char* topic, byte* payload, unsigned int len) {
   String tmp=topic;
   String c = String((char*)payload);
   c.toUpperCase();
-  trc("callback topic=");
-  trc(tmp + c);
- 
   
   if(c.indexOf("ON")>=0){
     trc("relay on");
-    digitalWrite(E2, 1);
-    digitalWrite(LED_BUILTIN, LOW);
+    digitalWrite(GPIO_Relais, LOW);
+    client.publish(subjectXtoMQTTt,"ON",will_Retain);
+
   }
   
   if(c.indexOf("OFF")>=0){
     trc("relay off");
-    digitalWrite(E2, 0);
-    digitalWrite(LED_BUILTIN, HIGH);
+    digitalWrite(GPIO_Relais, HIGH);
+    client.publish(subjectXtoMQTTt,"OFF",will_Retain);
   }
   
-}
-
-
-String macToStr(const uint8_t* mac)
-{
-  String result;
-  for (int i = 0; i < 6; ++i) {
-    result += String(mac[i], 16);
-    if (i < 5)
-      result += ':';
-  }
-  return result;
-}
-
-ESP8266WebServer webserver(80);
-
-void web_handle_root() {
-  trc("web root");
-  String html_payload = "WiFi.macAddress=";
-
-  uint8_t mac[6];
-  WiFi.macAddress(mac);
-  html_payload += macToStr(mac);
-  webserver.send(200, "text/plain", html_payload);
-}
-
-
-
-void web_setup() {
-  webserver.on("/", web_handle_root);
-  webserver.begin();
 }
 
 
@@ -117,9 +84,9 @@ void setup() {
   //
   Serial.begin(SERIAL_BAUD);
   //
-  pinMode(LED_BUILTIN, OUTPUT);     // Initialize the LED_BUILTIN pin as an output
+  //pinMode(LED_BUILTIN, OUTPUT);     // Initialize the LED_BUILTIN pin as an output
 
-  pinMode(E2, OUTPUT);
+  pinMode(GPIO_Relais, OUTPUT);
 
 
   //
@@ -130,8 +97,9 @@ void setup() {
     delay(500);
     trc(".");
   }
+  reconnect();
+  client.publish(subjectXtoMQTTt,"OFF",will_Retain);
 
-  //
   trc("");
   trc("WiFi connected");
   trc("IP address: ");
@@ -141,7 +109,7 @@ void setup() {
     ArduinoOTA.setPort(ota_port);
 
     // Hostname defaults to esp8266-[ChipID]
-    ArduinoOTA.setHostname(Client_Name);
+    ArduinoOTA.setHostname(ESP_Name);
 
     // No authentication by default
     ArduinoOTA.setPassword(ota_password);
@@ -164,15 +132,14 @@ void setup() {
       else if (error == OTA_END_ERROR) trc(F("End Failed"));
     });
     ArduinoOTA.begin();
-  web_setup();
+
 }
 
 void loop()
-{
-  unsigned long now = millis();
+{  ArduinoOTA.handle();
+   unsigned long now = millis();
   //MQTT client connexion management
-  if (!client.connected()) { // not connected
-    trc(F("Rot An"));
+   if (!client.connected()) { // not connected
     if (now - lastReconnectAttempt > 5000) {
       lastReconnectAttempt = now;
       // Attempt to reconnect
@@ -182,10 +149,7 @@ void loop()
     }
   } else { 
 
-    // trc(F("Rot Aus"));
-
-    webserver.handleClient();
-    
+ 
     client.loop();
     ArduinoOTA.handle();
   }
@@ -196,9 +160,8 @@ void loop()
 void trc(String msg){
   if (TRACE) {
     Serial.println(msg);
-  } else{
-    webserver.send(200, "text/plain", msg);
-
+  } else {
+  client.publish(trace_Topic,(char*)msg.c_str());
   }
-}
+ } 
 

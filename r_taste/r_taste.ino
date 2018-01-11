@@ -1,37 +1,40 @@
 
 
 #include "User_config.h"
-#include <PubSubClient.h>
-#include <ESP8266WiFi.h>
-#include <ArduinoOTA.h>
 
+#include <PubSubClient.h>
+
+uint8_t GPIO_Taste = 2;
 //adding this to bypass the problem of the arduino builder issue 50
 void callback(char*topic, byte* payload,unsigned int length);
 
-WiFiClient eClient;
+MQTTBASE baseclient;
+
 // client parameters
-PubSubClient client(mqtt_server, mqtt_port, callback, eClient);
+PubSubClient client(mqtt_server, mqtt_port, callback, baseclient.eClient);
 
 //MQTT last attemps reconnection date
 unsigned long lastReconnectAttempt = 0;
 static int contador=0;
-boolean tmpE2=false;  
+boolean tmpE2=false; 
+
+ 
 boolean reconnect() {
   // Loop until we're reconnected
   while (!client.connected()) {
     trc(F("MQTT connection...")); //F function enable to decrease sram usage
     #ifdef mqtt_user
-      if (client.connect(Client_Name, mqtt_user, mqtt_password, will_Topic, will_QoS, will_Retain, will_Message)) { // if an mqtt user is defined we connect to the broker with authentication
+      if (client.connect(mqtt_Client_Name, mqtt_user, mqtt_password, will_Topic, will_QoS, will_Retain, will_Message)) { // if an mqtt user is defined we connect to the broker with authentication
     #else
-      if (client.connect(Client_Name, will_Topic, will_QoS, will_Retain, will_Message)) {
+      if (client.connect(mqtt_Client_Name, will_Topic, will_QoS, will_Retain, will_Message)) {
     #endif
       trc(F("Connected to broker"));
       // Once connected, publish an announcement...
       client.publish(will_Topic,Gateway_AnnouncementMsg,will_Retain);
       // publish version
-      client.publish(version_Topic,ESP01_VERSION,will_Retain);
+      client.publish(version_Topic,ESP_VERSION,will_Retain);
       //Subscribing to topic
-      if (client.publish(subjectXtoMqtt, "OFF")) {
+      if (client.publish(trace_Topic, "Start")) {
        trc("publish " subjectXtoMqtt "ok");
       } else {
        trc("publish " subjectXtoMqtt "fail");
@@ -49,8 +52,7 @@ boolean reconnect() {
     contador++;
     String payload2="";
     payload2 = contador;
-    client.publish(mqtt_Topic Client_Name "/count",(char*)payload2.c_str());
-    trc(mqtt_Topic Client_Name "/count =");
+    client.publish(count_Topic,(char*)payload2.c_str());
 
   return client.connected();
 }
@@ -61,50 +63,23 @@ void callback(char* topic, byte* payload, unsigned int len) {
   
 }
 
-
-String macToStr(const uint8_t* mac)
-{
-  String result;
-  for (int i = 0; i < 6; ++i) {
-    result += String(mac[i], 16);
-    if (i < 5)
-      result += ':';
-  }
-  return result;
-}
-
-
-
-
 void setup() {
   //
+   baseclient.settings.Client_Version =ESP_VERSION;
+   baseclient.settings.Client_Name =ESP_Name;
+   baseclient.settings.Client_Type =ESP_Funktion;
+
+
   Serial.begin(SERIAL_BAUD);
   //
   pinMode(LED_BUILTIN, OUTPUT);     // Initialize the LED_BUILTIN pin as an output
-
-  pinMode(E2, INPUT_PULLUP);
-
-
-  //
-  WiFi.begin(wifi_ssid, wifi_password);
-
-  //
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    trc(".");
-  }
-
-  //
-  trc("");
-  trc("WiFi connected");
-  trc("IP address: ");
-  trc(WiFi.localIP().toString());
-
+  pinMode(GPIO_Taste, INPUT_PULLUP);
+  
     // Port defaults to 8266
     ArduinoOTA.setPort(ota_port);
 
     // Hostname defaults to esp8266-[ChipID]
-    ArduinoOTA.setHostname(Client_Name);
+    ArduinoOTA.setHostname(ESP_Name);
 
     // No authentication by default
     ArduinoOTA.setPassword(ota_password);
@@ -127,17 +102,25 @@ void setup() {
       else if (error == OTA_END_ERROR) trc(F("End Failed"));
     });
     ArduinoOTA.begin();
+    if (digitalRead(GPIO_Taste) == LOW){
+      client.publish(subjectXtoMqtt, "ON");
+    } else {
+      client.publish(subjectXtoMqtt, "OFF");
+    }
 
 }
 
 void loop()
-{
+{ ArduinoOTA.handle();
   unsigned long now = millis();
+  String str;
+  char b[2]; 
+  str=String(digitalRead(GPIO_Taste));
+  str.toCharArray(b,2);  
   //MQTT client connexion management
   if (!client.connected()) { // not connected
 
-    digitalWrite(LED_BUILTIN, LOW);  
-    trc(F("Rot An"));
+     trc(F("Rot An"));
     if (now - lastReconnectAttempt > 5000) {
       lastReconnectAttempt = now;
       // Attempt to reconnect
@@ -147,30 +130,32 @@ void loop()
     }
   } else { 
 
-    // trc(F("Rot Aus"));
-    digitalWrite(LED_BUILTIN, HIGH);
     
     client.loop();
     ArduinoOTA.handle();
-    if (digitalRead(E2) == LOW) 
+    if (digitalRead(GPIO_Taste) == LOW) 
       if (tmpE2 == true) {
          client.publish(subjectXtoMqtt, "ON");
          tmpE2 = false;
       }
-    if (digitalRead(E2) == HIGH)
+    if (digitalRead(GPIO_Taste) == HIGH)
       if (tmpE2 == false) {
         client.publish(subjectXtoMqtt, "OFF");
         tmpE2 = true;
         }
 
   }
-
+  digitalWrite(LED_BUILTIN, digitalRead(GPIO_Taste));
 }
-
 //trace
 void trc(String msg){
   if (TRACE) {
     Serial.println(msg);
-  } 
-}
+  } else {
+  client.publish(trace_Topic,(char*)msg.c_str());
+  }
+ } 
+
+
+
 

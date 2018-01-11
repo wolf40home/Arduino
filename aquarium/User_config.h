@@ -1,28 +1,33 @@
-#include "secrets.h"
+#include <HomeassistantMqtt.h>
+
+#define SERIAL_BAUD 115200
+
 /*-------------------VERSION----------------------*/
-#define ESP01_VERSION "0.2"
+#define ESP_VERSION "1"
+#define ESP_Name "Aquarium"
+#define ESP_Funktion "switch"
 
 /*-------------DEFINE YOUR NETWORK PARAMETERS BELOW----------------*/
 //MQTT Parameters definition
-#define Client_Name "Aquarium"
-#define mqtt_Topic "/home/switch/"
-#define version_Topic mqtt_Topic Client_Name "/version"
-#define will_Topic mqtt_Topic Client_Name "/LWT"
+#define mqtt_Client_Name ESP_Name
+#define mqtt_Topic mqtt_Home ESP_Funktion mqtt_Back mqtt_Client_Name mqtt_Back
+#define version_Topic mqtt_Topic "version"
+#define will_Topic mqtt_Topic "LWT"
+#define trace_Topic mqtt_Topic "Trace"
+#define count_Topic mqtt_Topic "Count"
 #define will_QoS 0
 #define will_Retain true
 #define will_Message "Offline"
 #define Gateway_AnnouncementMsg "Online"
+#define mqtt_Home "/home/"
+#define mqtt_Back "/"
 
-#define E2 2
-#define SERIAL_BAUD 115200
-  
 
 /*--------------MQTT general topics-----------------*/
 // global MQTT subject listened by the gateway to execute commands (send RF, IR or others)
-#define subjectMQTTtoX mqtt_Topic Client_Name "/commands/" 
+#define subjectMQTTtoX mqtt_Topic "commands/" 
+#define subjectXtoMQTTt mqtt_Topic "state" 
 
-/*-------------DEFINE YOUR OTA PARAMETERS BELOW----------------*/
-#define ota_hostname Client_Name
 
 /*-------------------ACTIVATE TRACES----------------------*/
 #define TRACE 0  // 0= trace off 1 = trace on
