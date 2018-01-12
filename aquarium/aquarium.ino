@@ -5,7 +5,7 @@
 #include <ESP8266WiFi.h>
 
 #include <ArduinoOTA.h>
-uint8_t GPIO_Relais = 2;
+uint8_t GPIO_Relais = 3;
 //adding this to bypass the problem of the arduino builder issue 50
 void callback(char*topic, byte* payload,unsigned int length);
 
@@ -59,16 +59,17 @@ boolean reconnect() {
 
 void callback(char* topic, byte* payload, unsigned int len) {
   
-  String tmp=topic;
-  String c = String((char*)payload);
-  c.toUpperCase();
-  
-  if(c.indexOf("ON")>=0){
-    trc("relay on");
-    digitalWrite(GPIO_Relais, LOW);
-    client.publish(subjectXtoMQTTt,"ON",will_Retain);
+    String c = String((char*)payload);
+    c = c.substring(0,len);  
+    c.toUpperCase();
+ 
+   
+    if(c.indexOf("ON")>=0){
+     trc("relay on");
+     digitalWrite(GPIO_Relais, LOW);
+     client.publish(subjectXtoMQTTt,"ON",will_Retain);
 
-  }
+    }
   
   if(c.indexOf("OFF")>=0){
     trc("relay off");
